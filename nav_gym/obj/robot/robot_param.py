@@ -6,19 +6,33 @@ class CarParam:
         if type == "normal": # The params are based on our own robot ZebraT
             # wheelbase, front, rear suspension, half width, lidar to center(defaut mount on the front)
             self.shape = np.array([0.53,0.25,0.25,0.35,0.65])
+            self.safe_dilation = 0.1 # dilate the counter with the value
             # limits 2X2 box ([v1_max, v2_max],
             #                 [v1_min, v2_min]) 
             # where v1 is linear speed, v2 is actually steering angle instead of angular speed in differential robots
-            self.v_limits = np.array([[2.,0.6 ],
-                                     [-1., -0.6]])
+            # self.v_limits = np.array([[2.,0.6 ],
+            #                          [-1., -0.6]])
+            # self.a_limits = np.array([[0.8, 1.0],
+            #                          [-1., -1.0]])
+            self.v_limits = np.array([[0.6, 0.6 ],
+                                     [-0.6, -0.6]])
             self.a_limits = np.array([[0.8, 1.0],
                                      [-1., -1.0]])
             # Lidar param
             self.fan_range = np.array([0, 2*pi])
             self.min_range = 0.1
             self.max_range = 6.0
-            self.ray_num = 64
+            self.ray_num = 32
             self.angle_reso = 0.098
+            # Goal parameters
+            self.look_ahead_dist = 2.0 # look-ahead distance / local goal radius
+            # Value map parameters
+            self.value_base = 0.9900
+            self.dv = 0.0001
+            # Map parameters
+            self.world_reso = 0.01
+            # Other
+            self.achieve_tolerance = 0.3
 
 
             """
@@ -30,8 +44,22 @@ class CarParam:
             self.disk_centers = self.calc_disk_centers()    # Centers of collision circles
             # self.vertices contains array([four vertices + lidar center + geometry center])
             self.vertices = self.calc_vertices() # calc vertices and geometry center relative vector to vehicle center, then do tfs
+            self.safe_vertices = self.calc_safe_vertices()
 
-    
+    def calc_safe_vertices(self):
+        wheel_base = self.shape[0]
+        front_sus = self.shape[1]
+        rear_sus = self.shape[2]
+        half_width = self.shape[3]
+        d = 2*self.safe_dilation
+        d_l = self.shape[4]
+        rl = np.array([-rear_sus-d-d_l, half_width+d]) # rear left vertice
+        rr = np.array([-rear_sus-d-d_l, -half_width-d])
+        fl = np.array([wheel_base+front_sus+d-d_l, half_width+d ])
+        fr = np.array([wheel_base+front_sus+d-d_l, -half_width-d])
+        return np.array([rl,rr,fr,fl])
+
+
     def calc_vertices(self):
         wheel_base = self.shape[0]
         front_sus = self.shape[1]
@@ -44,6 +72,9 @@ class CarParam:
         lc = np.array([self.shape[4], 0.]) # Lidar center 
         gc = np.array([(wheel_base+rear_sus+front_sus)/2-rear_sus, 0]) # Geometry center
         return np.array([rl,rr,fr,fl,lc,gc])
+
+
+
 
     def calc_disk_r(self):
         half_width = self.shape[3]

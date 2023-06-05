@@ -1,6 +1,6 @@
 import numpy as np
 from nav_gym.obj.geometry.objects import Polygon, Circle
-from math import cos, sin, sqrt
+from math import cos, sin, sqrt, pi
 
 """
 The functions start with "check" return bool.
@@ -52,30 +52,68 @@ def check_circ_circ(circle1, circle2):
     dist = np.linalg.norm(circle1.center - circle2.center)
     return dist < circle1.radius + circle2.radius
 
-
-
-def line_line(line1, line2):
-    x1, y1 = line1[0]
-    x2, y2 = line1[1]
-    x3, y3 = line2[0]
-    x4, y4 = line2[1]
+def line_line(s1, s2):
+    # s1 and s2 are tuples representing line segments ((x1, y1), (x2, y2))
+    x1, y1 = s1[0]
+    x2, y2 = s1[1]
+    x3, y3 = s2[0]
+    x4, y4 = s2[1]
+    x = 0.
+    y = 0.
+    # Calculate the slope and y-intercept of the lines containing the line segments
+    m1 = (y2 - y1) / (x2 - x1) if x2 != x1 else None
+    b1 = y1 - m1 * x1 if m1 is not None else x1
     
-    # calculate slopes and y-intercepts
-    m1 = (y2 - y1) / (x2 - x1)
-    b1 = y1 - m1 * x1
+    m2 = (y4 - y3) / (x4 - x3) if x4 != x3 else None
+    b2 = y3 - m2 * x3 if m2 is not None else x3
     
-    m2 = (y4 - y3) / (x4 - x3)
-    b2 = y3 - m2 * x3
-    
-    # check if lines are parallel
+    # Check if the lines containing the line segments are parallel
     if m1 == m2:
         return None
     
-    # calculate point of intersection
-    x_intersect = (b2 - b1) / (m1 - m2)
-    y_intersect = m1 * x_intersect + b1
+    # Calculate the intersection point
+    if m1 is None:
+        x = x1
+        y = m2 * x + b2
+    elif m2 is None:
+        x = x3
+        y = m1 * x + b1
+    else:
+        x = (b2 - b1) / (m1 - m2)
+        y = m1 * x + b1
     
-    return np.array([x_intersect, y_intersect])
+    # Check if the intersection point lies within both line segments
+    t = 0.0001 # tolerance
+    if (x1-t <= x <= x2+t or x2-t <= x <= x1+t) and \
+        (y1-t <= y <= y2+t or y2-t <= y <= y1+t) and \
+        (x3-t <= x <= x4+t or x4-t <= x <= x3+t) and \
+        (y3-t <= y <= y4+t or y4-t <= y <= y3+t):
+        return (x, y)
+    # print("x ,y ", x," ",y)
+    return None
+
+# def line_line(line1, line2):
+#     x1, y1 = line1[0]
+#     x2, y2 = line1[1]
+#     x3, y3 = line2[0]
+#     x4, y4 = line2[1]
+    
+#     # calculate slopes and y-intercepts
+#     m1 = (y2 - y1) / (x2 - x1)
+#     b1 = y1 - m1 * x1
+    
+#     m2 = (y4 - y3) / (x4 - x3)
+#     b2 = y3 - m2 * x3
+    
+#     # check if lines are parallel
+#     if m1 == m2:
+#         return None
+    
+#     # calculate point of intersection
+#     x_intersect = (b2 - b1) / (m1 - m2)
+#     y_intersect = m1 * x_intersect + b1
+    
+#     return np.array([x_intersect, y_intersect])
 
 
 
@@ -83,15 +121,13 @@ def line_polygon(ray, polygon):
     closest_intersection = None
     min_distance = np.inf
     
-    for i in range(len(polygon.vertices)):
-        p1 = polygon.vertices[i]
-        p2 = polygon.vertices[(i+1)%len(polygon.vertices)]
-        
-        edge = (p1, p2)
+    for edge in polygon.edges:
+        # print("edge is: ", edge, " ray is: ",ray)
         intersection = line_line(ray, edge)
+        # print("intersection is: " ,intersection )
         
         if intersection is not None:
-            distance = np.linalg.norm(ray[0] - intersection)
+            distance = np.linalg.norm(np.array(ray[0]) - np.array(intersection))
             if distance < min_distance:
                 closest_intersection = intersection
                 min_distance = distance
@@ -147,7 +183,7 @@ def line_map(line,map,reso):
     # x = []
     # y = []
     while (x0 != x1 or y0 != y1):
-        if map[y0,x0]== 0:
+        if map[y0,x0]== 1:
             return x0*reso,y0*reso
         # x.append(x0)
         # y.append(y0)
@@ -159,6 +195,38 @@ def line_map(line,map,reso):
             err += dx
             y0 += sy
     return x1*reso, y1*reso
+
+# (start,end),map, reso,id_value,dv
+def id_line_map(line,map,reso,id_value,dv):
+    hdv = dv/2
+    x0, y0 = line[0]
+    x1, y1 = line[1]
+    x0 = round(x0/reso); y0 = round(y0/reso)
+    x1 = round(x1/reso); y1 = round(y1/reso) 
+    dx = abs(x1 - x0)
+    dy = abs(y1 - y0)
+    sx = -1 if x0 > x1 else 1
+    sy = -1 if y0 > y1 else 1
+    err = dx - dy
+
+    # x = []
+    # y = []
+    while (x0 != x1 or y0 != y1):
+        # print("id_value: ", id_value, " hdv: ",hdv)
+        # print("smaller than value: ",map[y0,x0]<=id_value-hdv)
+        if map[y0,x0]>= 0.5 and ((map[y0,x0]<=id_value-hdv) or (map[y0,x0] >= id_value + hdv)) :
+            return x0*reso,y0*reso
+        # x.append(x0)
+        # y.append(y0)
+        e2 = 2 * err
+        if e2 > -dy:
+            err -= dy
+            x0 += sx
+        if e2 < dx:
+            err += dx
+            y0 += sy
+    return x1*reso, y1*reso
+
 
 
 
@@ -174,6 +242,15 @@ def dist(point1,point2):
 
 def rot(theta):
     return np.array([[cos(theta), -sin(theta)],[sin(theta), cos(theta)]])
+
+def topi(theta):
+    # transform angle to [-pi,pi]
+    angle = theta
+    if theta > pi:
+        angle = theta-2*pi
+    elif theta < -pi:
+        angle = theta + 2*pi
+    return angle
 
 # polygon = Polygon(vertices)
 # p2 = Polygon(vertices2)
