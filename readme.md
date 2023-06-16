@@ -4,4 +4,6 @@ The 2D lidar is available for state representions and collision detections. DIY 
 
 
  <img src="./nav_gym1.png" width = "30%" height = "30%" alt="Simulation" align=center />
+ <img src="./corridor2.gif" width = "30%" height = "30%" alt="Simulation" align=center />
+ <img src="./lidar.png" width = "30%" height = "30%" alt="Simulation" align=center />
 
