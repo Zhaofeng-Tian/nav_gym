@@ -43,27 +43,77 @@ class RVO():
             v[0]-VO[0]
             VO[1]
 
-    def build_VO_problem(self, VO_all, pa, goal, v, v_limits, a_limits, dt):
-        goal_c = pa - goal # goal w.r.t. current position
-        vdes = goal_c * v_limits[0,1]/self.dist(goal_c)
-        vmax = v_limits[0,1]
-        opti = ca.Opti();
-        vcx,vcy = v; vdesx,vdesy = vdes
-        dvx = opti.variable();
-        dvy = opti.variable();
+    def build_VO_problem( self, VO_all, state, goal, v_limits= np.array([[-2,2],[-2,2]]), a_limits=np.array([[-0.5,0.5],[-1.5,1.5]]), dt=0.2):
+        vmax = v_limits[0,1] # Linear speed max
+        vmin = v_limits[0,0]
+        amax = a_limits[0,1]  # linear acceleration limit
+        bmax = a_limits[0,0]  # brake decceleration limit
+        wmax = v_limits[1,1]  # rotate speed limit
+        wmin = v_limits[1,0]
+        wamax = a_limits[1,1]  # rotation acceleration limit
+        wrmax = a_limits[1,0]  # reverse rotation acceleration limit
+        
+        px,py, theta_cur, v_cur, w_cur = state
+        goal_c =  goal - state[0:2] # goal w.r.t. current position
+        vdes = goal_c * vmax/self.dist(goal_c)
+        v_des,theta_des = self.factorize_vector(vdes) # desired v
+        dt = dt 
+        
+        # build optimization problem
+        opti = ca.Opti();    
+        v = opti.variable();
+        w = opti.variable();
+        # 0. objective
+        opti.minimize(  (v-v_des)**2+(theta_cur+w*dt-theta_des)**2 )
 
+        # 1. linear speed value constraint
+        opti.subject_to( v <= vmax)
+        opti.subject_to( v >= vmin)
 
-        opti.minimize(  (vx-vdesx)**2+(vy-vdesy)**2   );
-        # dv subject to acceleration limits
-        opti.subject_to(  );
-        opti.subject_to(  vx**2+vy**2 <=vmax**2 );
+        # 2. dv subject to acceleration limits
+        opti.subject_to( v-v_cur <= amax * dt  ) 
+        opti.subject_to( v-v_cur >= bmax * dt )     
 
+        # # 3. angular speed value constraint
+        opti.subject_to( w <= wmax)
+        opti.subject_to( w >= wmin)
+        
+        # 4. angular acceleration 
+        opti.subject_to( w-w_cur <= wamax*dt)
+        opti.subject_to( w-w_cur >= wrmax*dt)
+
+        for VO in VO_all:
+            # VO = VO_all[0]
+            # VO  :=   px,  py  ,x_left_leg, y_left_leg, x_r_leg, y_r_leg
+            pxvo = VO[0]
+            pyvo = VO[1]
+            x_lleg = VO[2]
+            y_lleg = VO[3]
+            x_rleg = VO[4]
+            y_rleg = VO[5]
+
+            # # 4. subject to VO left leg   (vt − vp) × vl < 0 & (vt − vp) × vr > 0
+            opti.subject_to( (v*np.cos(theta_cur+w*dt)-pxvo)*y_lleg-(v*np.sin(theta_cur+w*dt)-pyvo)*x_lleg < 0 )
+
+            # # 5. subject to VO right leg   (vt − vp) × vl < 0 & (vt − vp) × vr > 0
+            opti.subject_to( (v*np.cos(theta_cur+w*dt)-pxvo)*y_rleg-(v*np.sin(theta_cur+w*dt)-pyvo)*x_rleg < 0 )
+            print(" Iteration for VO constraints")
         opti.solver('ipopt');
+        No_solution = False
+        try:
+            sol = opti.solve()
+        except RuntimeError as error:
+            print("No solution in original problem")
+            print("deug value: ",opti.debug.value(v))
+            No_solution = True
 
-        sol = opti.solve();
-
-        sol.value(x)
-        sol.value(y)
+        if No_solution:
+            v_computed = opti.debug.value(v) 
+            w_computed = opti.debug.value(w)
+        else: 
+            v_computed = sol.value(v) 
+            w_computed = sol.value(w) 
+        return np.array([v_computed,w_computed])
               
     def calc_VO(self, pa, pb, va, vb, ra, rb):
         pc = pb - pa
@@ -111,8 +161,11 @@ class RVO():
             vectorized_v.append(np.array([cos(v[0])*v[1], sin(v[0])*v[1]]))
         return vectorized_v
 
-    def dist(self, vector):
+    def dist(vector):
         return sqrt(vector[0]**2+vector[1]**2)
+
+    def factorize_vector(vector):
+        return np.array([self.dist(vector),atan2(vector[1],vector[0])])
 
 
 agent = RVO(10)

@@ -26,6 +26,8 @@ def build_VO_problem( VO_all, pa, goal, v, v_limits= np.array([[-2,2],[-2,2]]), 
     px, py = pa # agent current position
     vcx,vcy = v # current velocity
     vdesx,vdesy = vdes # desired v
+    len_v = sqrt(vx**2+vy**2)
+    len_cv = sqrt(vcx**2+vcy**2)
     
     vx = opti.variable();
     vy = opti.variable();
@@ -35,8 +37,7 @@ def build_VO_problem( VO_all, pa, goal, v, v_limits= np.array([[-2,2],[-2,2]]), 
     opti.subject_to( vx**2+vy**2 <=vmax**2 )
 
     # 2. dv subject to acceleration limits
-    # opti.subject_to( sqrt(vx**2+vy**2) - sqrt(vcx**2+vcy**2) <=amax*dt  )   
-    # opti.subject_to( (vx**2+vy**2) - (vcx**2+vcy**2) <=amax*dt  )   
+    opti.subject_to( (vx**2+vy**2) - (vcx**2+vcy**2) <=amax*dt  )   
 
     # # 3. angular speed value constraint
     # opti.subject_to( np.arctan2(vy, vx)-np.arctan2(vcy,vcx) >= -wmax*dt) 
